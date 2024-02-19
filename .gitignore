@@ -24,3 +24,7 @@ fosfosol-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# JSON files used for application data
+api_key.json
+settings.json

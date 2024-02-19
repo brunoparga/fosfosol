@@ -14,7 +14,8 @@ defmodule Fosfosol.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:elixir_google_spreadsheets, :logger],
+      mod: {Fosfosol, []}
     ]
   end
 
@@ -25,7 +26,8 @@ defmodule Fosfosol.MixProject do
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
       {:anki_connect, "~> 0.1.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:elixir_google_spreadsheets, "~> 0.3"}
     ]
   end
 end
