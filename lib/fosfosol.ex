@@ -15,7 +15,10 @@ defmodule Fosfosol do
   """
   def sync do
     {:ok, sheet} =
-      GSS.Spreadsheet.Supervisor.spreadsheet("1cwUCmUNgPZqoWQC8x_0LDLcf0u9sWjdMvRXg4w8LFuE")
-    IO.inspect(GSS.Spreadsheet.properties(sheet))
+      GSS.Spreadsheet.Supervisor.spreadsheet(Application.fetch_env!(:fosfosol, :file_id))
+    IO.inspect(fn ->
+      {:ok, props} = GSS.Spreadsheet.properties(sheet)
+      props["properties"]["title"]
+    end.())
   end
 end

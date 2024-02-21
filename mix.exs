@@ -27,7 +27,8 @@ defmodule Fosfosol.MixProject do
       {:anki_connect, "~> 0.1.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:elixir_google_spreadsheets, "~> 0.3"}
+      {:elixir_google_spreadsheets, "~> 0.3"},
+      {:jason, "~> 1.4"}
     ]
   end
 end
