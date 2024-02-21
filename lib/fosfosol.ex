@@ -38,13 +38,27 @@ defmodule Fosfosol do
     # end)
     {:ok, notes} = AnkiConnect.notes_info(%{notes: sheet_needs_id})
 
-    _proper_notes = Enum.map(notes, fn note ->
-      %{
-        id: note["noteId"],
-        front: note["fields"]["Front"]["value"],
-        back: note["fields"]["Back"]["value"]
-      }
-    end)
+    proper_notes =
+      Enum.map(notes, fn note ->
+        %{
+          id: note["noteId"],
+          front: deflag(note["fields"]["Front"]["value"]),
+          back: deflag(note["fields"]["Back"]["value"])
+        }
+      end)
+      |> IO.inspect()
+
+    _notes_with_rows =
+      Enum.map(proper_notes, fn
+        %{front: _front, back: _back} = note ->
+          # search db rows to include the corresponding row ID in these maps
+          note
+      end)
+  end
+
+  defp deflag(binary) do
+    [_flag, text] = String.split(binary, " ", parts: 2)
+    text
   end
 
   defp read_sheet_ids(sheet) do
