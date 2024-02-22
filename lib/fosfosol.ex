@@ -37,28 +37,71 @@ defmodule Fosfosol do
     #   row -> length(row) == 4
     # end)
     {:ok, notes} = AnkiConnect.notes_info(%{notes: sheet_needs_id})
+    proper_notes = Enum.map(notes, &properize_note/1)
 
-    proper_notes =
-      Enum.map(notes, fn note ->
-        %{
-          id: note["noteId"],
-          front: deflag(note["fields"]["Front"]["value"]),
-          back: deflag(note["fields"]["Back"]["value"])
-        }
-      end)
-      |> IO.inspect()
-
-    _notes_with_rows =
+    [notes_with_row_numbers, missing_from_spreadsheet, errors] =
       Enum.map(proper_notes, fn
-        %{front: _front, back: _back} = note ->
+        %{front: note_front, back: note_back, id: note_id} ->
           # search db rows to include the corresponding row ID in these maps
-          note
+          front_side_row = Enum.find_value(sheet_rows, finder(1, note_front))
+          back_side_row = Enum.find_value(sheet_rows, finder(2, note_back))
+          comparison = compare(front_side_row, back_side_row)
+
+          case comparison do
+            :missing ->
+              {:missing, [note_front, note_back, note_id]}
+
+            :error ->
+              {:error,
+               "Anki note \"#{note_front}\" (#{front_side_row})/\"#{note_back}\" (#{back_side_row})found different matches in the spreadsheet."}
+
+            :front ->
+              {:ok, [front_side_row, note_front, note_back, note_id]}
+
+            :back ->
+              {:ok, [back_side_row, note_front, note_back, note_id]}
+
+            _ ->
+              {:error, "Unknown error"}
+          end
       end)
+      |> Enum.reduce([[], [], []], fn
+        {:ok, value}, [hits, missing, errors] -> [[value | hits], missing, errors]
+        {:missing, value}, [hits, missing, errors] -> [hits, [value | missing], errors]
+        {:error, reason}, [hits, missing, errors] -> [hits, missing, [reason | errors]]
+      end)
+      |> Enum.map(&Enum.reverse/1)
+
+    # {_rows, } = missing_from_spreadsheet
+    # # |> Enum.reduce
+    # |> IO.inspect()
+    IO.inspect(notes_with_row_numbers)
   end
 
   defp deflag(binary) do
     [_flag, text] = String.split(binary, " ", parts: 2)
     text
+  end
+
+  defp properize_note(note) do
+    %{
+      id: note["noteId"],
+      front: deflag(note["fields"]["Front"]["value"]),
+      back: deflag(note["fields"]["Back"]["value"])
+    }
+  end
+
+  defp compare(front, back) do
+    cond do
+      front == nil and back == nil -> :missing
+      front && back && front != back -> :error
+      front -> :front
+      back -> :back
+    end
+  end
+
+  defp finder(position, needle) do
+    fn row -> if Enum.at(row, position) == needle, do: hd(row) end
   end
 
   defp read_sheet_ids(sheet) do
@@ -83,9 +126,9 @@ defmodule Fosfosol do
         )
 
       {_count, chunk_rows} =
-        Enum.reduce(raw_rows, {0, []}, fn
+        Enum.reduce(raw_rows, {List.first(indexes_chunk), []}, fn
           row, {count, list} ->
-            {count + 1, [[count + 1 | row] | list]}
+            {count + 1, [[count | row] | list]}
         end)
 
       rows ++ Enum.reverse(chunk_rows)
