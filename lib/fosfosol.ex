@@ -25,16 +25,12 @@ defmodule Fosfosol do
     # add them if necessary.
     #
     # We get back all of the notes in a format we need, for later.
+    # TODO: also get back just the flag ones, for the report.
     anki_notes = Anki.add_flags(anki_ids, writer)
 
     # Now we load the rows from the spreadsheet.
     sheet = Sheets.load_sheet()
     sheet_rows = Sheets.read_rows(sheet)
-
-    # We want to compare the IDs present on Anki but not in Sheets.
-    # Those are the non-`nil` fourth elements of row tuples.
-    sheet_ids = get_ids_from_sheet(sheet_rows)
-    sheet_needs_id = anki_ids -- sheet_ids
 
     # Equipped with all this data, we compare the two sources.
     # We're looking for anything that might need to be inserted or
@@ -57,30 +53,23 @@ defmodule Fosfosol do
       # Sort the list of rows to make our lives easier.
       |> Map.update!(
         :updates,
-        &Enum.sort(&1, fn [row1 | _rest1], [row2 | _rest2] -> row1 < row2 end)
+        &Enum.sort(&1, fn row1, row2 -> row1 < row2 end)
       )
 
-    writer.("Updates to the spreadsheet:")
-    writer.(report.updates)
-    writer.("Notes missing from the spreadsheet:")
-    writer.(report.sheet_inserts)
-    writer.("Errors:")
-    writer.(report.errors)
+    # TODO: get rid of the writer – convert once to JSON and File.write! it.
+    writer.(report)
 
     if length(report.updates) > 0 or length(report.sheet_inserts) > 0 do
-      writer.("Inserting and updating into the sheet")
-
       insert_notes_into_sheet(
         sheet,
         report.updates,
         report.sheet_inserts,
-        hd(List.last(sheet_rows))
+        elem(List.last(sheet_rows), 0)
       )
-      |> writer.()
     end
 
-    if length(report.anki_inserts) > 0,
-      do: create_flashcards_and_update_ids(sheet, report.anki_inserts)
+    if length(report.sheet_rows) > 0,
+      do: create_flashcards_and_update_ids(sheet, report.sheet_rows)
 
     :ok = File.close(file)
   end
@@ -100,19 +89,24 @@ defmodule Fosfosol do
       {nil, nil} ->
         Map.update!(report, :sheet_inserts, &[[note_front, note_back, note_id] | &1])
 
+      {row, row} when not is_nil(elem(row, 3)) ->
+        Map.update!(report, :perfect_count, &(&1 + 1))
+        |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
+
       {row, row} ->
         # row your boat gently down the Stream
         # merrily, merrily, merrily, merrily
         # you've just crashed the BEAM
-        Map.update!(report, :perfect_count, &(&1 + 1))
+        Map.update!(report, :updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
 
       {row, nil} ->
-        Map.update!(report, :updates, &[[elem(row, 0), note_front, note_back, note_id] | &1])
+        # TODO: let the user decide the source of truth in case of conflict
+        Map.update!(report, :updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
 
       {nil, row} ->
-        Map.update!(report, :updates, &[[elem(row, 0), note_front, note_back, note_id] | &1])
+        Map.update!(report, :updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == back_side_row end))
 
       {_something, _something_else} ->
@@ -127,35 +121,29 @@ defmodule Fosfosol do
     end
   end
 
-  defp get_ids_from_sheet(sheet_rows) do
-    sheet_rows
-    |> Enum.reduce([], fn
-      {_, _, _, nil}, acc -> acc
-      {_, _, _, id}, acc -> [id | acc]
-    end)
-  end
-
   defp insert_notes_into_sheet(sheet, updates, inserts, last_row) do
-    ranges = Enum.map(updates, fn [row | _data] -> "A#{row}:C#{row}" end)
-    values = Enum.map(updates, &tl/1)
+    ranges = Enum.map(updates, fn {row, _, _, _} -> "A#{row}:C#{row}" end)
+    values = Enum.map(updates, &tl(Tuple.to_list(&1)))
 
     update_data =
-      case GSS.Spreadsheet.write_rows(sheet, ranges, values) do
-        {:ok, data} ->
-          IO.puts("Should have written #{length(ranges)} IDs to spreadsheet.")
-          data
+      case values do
+        [] ->
+          []
 
-        {:error, exception} ->
-          Exception.format(:error, exception)
+        data ->
+          GSS.Spreadsheet.write_rows(sheet, ranges, values)
+          IO.puts("Should have updated #{length(ranges)} existing spreadsheet rows.")
+          data
       end
 
     insert_data =
-      case GSS.Spreadsheet.append_rows(sheet, last_row + 1, inserts) do
-        {:error, exception} ->
-          Exception.format(:error, exception)
+      case inserts do
+        [] ->
+          []
 
         data ->
-          IO.puts("Should have appent #{length(inserts)} rows to spreadsheet.")
+          GSS.Spreadsheet.append_rows(sheet, last_row + 1, inserts)
+          IO.puts("Should have added #{length(inserts)} new rows to spreadsheet.")
           data
       end
 
@@ -169,19 +157,23 @@ defmodule Fosfosol do
     updates =
       rows
       |> Enum.zip(new_flashcard_ids)
-      |> Enum.map(fn {row, id} -> row ++ [id] end)
+      |> Enum.map(fn {row, id} -> put_elem(row, 3, id) end)
 
     insert_notes_into_sheet(sheet, updates, [], 320)
   end
 
-  defp build_flashcard([_row, front, back]) do
+  defp build_flashcard({_row, front, back, nil}) do
     base =
       "./config/settings.json"
       |> File.read!()
       |> Jason.decode!(keys: :atoms)
       |> Map.drop(~w[front back file_id last_updated]a)
 
-    # TODO: ADD FLAGS TO TEXTTTT
-    Map.put(base, :fields, %{Front: front, Back: back})
+    Map.put(base, :fields, %{Front: enflag(:front, front), Back: enflag(:back, back)})
+  end
+
+  defp enflag(side, text) do
+    flag = Keyword.fetch!(Application.fetch_env!(:fosfosol, side).values, :flag)
+    "#{flag} #{text}"
   end
 end

@@ -1,5 +1,7 @@
 defmodule Fosfosol.Anki do
   def read_ids do
+    # TODO: add an easy way to switch between test and production mode
+    # {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:Test"})
     {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:M-224"})
     anki_ids
   end
@@ -42,8 +44,10 @@ defmodule Fosfosol.Anki do
   end
 
   defp deflag(binary) do
-    [_flag, text] = String.split(binary, " ", parts: 2)
-    text
+    case String.split(binary, " ", parts: 2) do
+      [_flag, text] -> text
+      [text] -> text
+    end
   end
 
   defp properize_note(note) do
