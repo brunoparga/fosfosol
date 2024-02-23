@@ -43,6 +43,11 @@ defmodule Fosfosol do
     # the IDs *present* in the sheet from the list of Anki IDs.
     {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:M-224"})
 
+    # We check if there are entries without flags and add them if necessary
+    added_flags = add_flags(anki_ids)
+    write.("Notes that were missing flags:")
+    write.(added_flags)
+
     sheet_ids =
       sheet_rows
       |> Enum.reduce([], fn
@@ -182,6 +187,42 @@ defmodule Fosfosol do
   defp deflag(binary) do
     [_flag, text] = String.split(binary, " ", parts: 2)
     text
+  end
+
+  defp add_flags(ids) do
+    {:ok, notes} = AnkiConnect.notes_info(%{notes: ids})
+
+    notes = notes
+    |> Enum.map(&properize_note_no_flag/1)
+    |> Enum.reject(fn
+      [front, back, _id] -> String.starts_with?(front, "🇪🇪") and String.starts_with?(back, "🏴󠁧󠁢󠁥󠁮󠁧󠁿")
+    end)
+
+    notes
+    |> Enum.map(&prepare_note_for_update/1)
+    |> Enum.each(&AnkiConnect.update_note/1)
+
+    notes
+  end
+
+  defp prepare_note_for_update([front, back, id]) do
+    %{
+      note: %{
+        id: id,
+        fields: %{
+          Front: "🇪🇪 #{front}",
+          Back: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 #{back}"
+        }
+      }
+    }
+  end
+
+  defp properize_note_no_flag(note) do
+    [
+      note["fields"]["Front"]["value"],
+      note["fields"]["Back"]["value"],
+      note["noteId"]
+    ]
   end
 
   defp properize_note(note) do
