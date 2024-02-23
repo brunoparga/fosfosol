@@ -4,7 +4,7 @@ defmodule Fosfosol do
   """
 
   use Application
-  alias GSS.Spreadsheet, as: Sheet
+  alias Fosfosol.{Anki, Report, Sheets}
 
   def start(_type, _args) do
     sync()
@@ -15,90 +15,124 @@ defmodule Fosfosol do
   Run the synchronization between Google Spreadsheets and Anki.
   """
   def sync do
-    case File.rm("./report") do
-      :ok -> :ok
-      {:error, _reason} -> :ok
-    end
+    {writer, file} = Report.build_writer()
 
-    file = File.open!("./report", [:append, :utf8])
-    write = build_writer(file)
+    # First of all we load just the IDs from Anki.
+    anki_ids = Anki.read_ids()
 
-    {:ok, sheet} =
-      Sheet.Supervisor.spreadsheet(Application.fetch_env!(:fosfosol, :file_id))
+    # One thing that is cheap and only requires interacting with Anki,
+    # not Sheets, is to check if there are entries without flags. We
+    # add them if necessary.
+    #
+    # We get back all of the notes in a format we need, for later.
+    anki_notes = Anki.add_flags(anki_ids, writer)
 
-    sheet_rows = read_sheet_rows(sheet)
-    # first we figure out which words are in the spreadsheet but not Anki
-    anki_needs_cards =
-      Enum.reject(sheet_rows, fn
-        # [row_number, front, back, id]
-        # if there is no ID, the length of the row is 3
-        row -> length(row) == 4
-      end)
+    # Now we load the rows from the spreadsheet.
+    sheet = Sheets.load_sheet()
+    sheet_rows = Sheets.read_rows(sheet)
 
-    write.("Words in Sheets but not Anki:")
-    write.(anki_needs_cards)
-
-    # Then we figure out which rows in the spreadsheet have flashcards
-    # but the corresponding ID is not in the sheet. We do that by excluding
-    # the IDs *present* in the sheet from the list of Anki IDs.
-    {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:M-224"})
-
-    # We check if there are entries without flags and add them if necessary
-    added_flags = add_flags(anki_ids)
-    write.("Notes that were missing flags:")
-    write.(added_flags)
-
-    sheet_ids =
-      sheet_rows
-      |> Enum.reduce([], fn
-        [_row_number, _front, _back, id], acc -> [String.to_integer(id) | acc]
-        _no_id, acc -> acc
-      end)
-      |> Enum.reverse()
-
+    # We want to compare the IDs present on Anki but not in Sheets.
+    # Those are the non-`nil` fourth elements of row tuples.
+    sheet_ids = get_ids_from_sheet(sheet_rows)
     sheet_needs_id = anki_ids -- sheet_ids
 
-    # Once we know the IDs present on Anki but not Sheets, we load their
-    # content from Anki as a source of truth.
-    {:ok, notes} = AnkiConnect.notes_info(%{notes: sheet_needs_id})
-    proper_notes = Enum.map(notes, &properize_note/1)
+    # Equipped with all this data, we compare the two sources.
+    # We're looking for anything that might need to be inserted or
+    # updated on either source. The ideal case is when IDs, fronts and
+    # backs all match. There might be rows that need updated from Anki,
+    # notes that are not even in the spreadsheet yet and need to be
+    # inserted, and mismatches between the sources to handle manually.
+    # There might also be sheet rows for which flashcards need to
+    # be created.
+    initial_report = %{
+      sheet_rows: sheet_rows,
+      perfect_count: 0,
+      updates: [],
+      sheet_inserts: [],
+      errors: []
+    }
 
-    # Equipped with that data, we figure out whether it is just the ID that's
-    # missing from the sheet, or the whole word, or if something's amiss.
-    [notes_with_row_numbers, missing_from_spreadsheet, errors] =
-      Enum.map(proper_notes, workhorse(sheet_rows))
-      |> Enum.reduce([[], [], []], fn
-        {:ok, value}, [hits, missing, errors] -> [[value | hits], missing, errors]
-        {:missing, value}, [hits, missing, errors] -> [hits, [value | missing], errors]
-        {:error, reason}, [hits, missing, errors] -> [hits, missing, [reason | errors]]
-      end)
-      |> Enum.map(&Enum.reverse/1)
+    report =
+      Enum.reduce(anki_notes, initial_report, &generate_report/2)
+      # Sort the list of rows to make our lives easier.
+      |> Map.update!(
+        :updates,
+        &Enum.sort(&1, fn [row1 | _rest1], [row2 | _rest2] -> row1 < row2 end)
+      )
 
-    notes_with_row_numbers =
-      notes_with_row_numbers
-      |> Enum.sort(fn [row1 | _rest1], [row2 | _rest2] -> row1 < row2 end)
+    writer.("Updates to the spreadsheet:")
+    writer.(report.updates)
+    writer.("Notes missing from the spreadsheet:")
+    writer.(report.sheet_inserts)
+    writer.("Errors:")
+    writer.(report.errors)
 
-    write.("Notes with row numbers:")
-    write.(notes_with_row_numbers)
-    write.("Notes missing from the spreadsheet:")
-    write.(missing_from_spreadsheet)
-    write.("Errors:")
-    write.(errors)
-    :ok = File.close(file)
-
-    if length(notes_with_row_numbers) > 0 or length(missing_from_spreadsheet) > 0 do
-      write.("Inserting and updating into the sheet")
+    if length(report.updates) > 0 or length(report.sheet_inserts) > 0 do
+      writer.("Inserting and updating into the sheet")
 
       insert_notes_into_sheet(
         sheet,
-        notes_with_row_numbers,
-        missing_from_spreadsheet,
+        report.updates,
+        report.sheet_inserts,
         hd(List.last(sheet_rows))
       )
-      |> write.()
+      |> writer.()
     end
 
-    if length(anki_needs_cards) > 0, do: create_flashcards_and_update_ids(sheet, anki_needs_cards)
+    if length(report.anki_inserts) > 0,
+      do: create_flashcards_and_update_ids(sheet, report.anki_inserts)
+
+    :ok = File.close(file)
+  end
+
+  defp generate_report([note_front, note_back, note_id], report) do
+    # Okay, so now we're iterating over Anki notes with the sheet rows
+    # in context. For each note, we first find the number of the row
+    # that corresponds to it. Since there might have been changes in
+    # the source of truth (Anki), we look both for the row that matches
+    # the front text and the back text of the flashcard, in the hope
+    # that we will either get two matching values, or one value and
+    # `nil`. Getting two different non-`nil` values is a problem.
+    front_side_row = Enum.find(report.sheet_rows, &(elem(&1, 1) == note_front))
+    back_side_row = Enum.find(report.sheet_rows, &(elem(&1, 2) == note_back))
+
+    case {front_side_row, back_side_row} do
+      {nil, nil} ->
+        Map.update!(report, :sheet_inserts, &[[note_front, note_back, note_id] | &1])
+
+      {row, row} ->
+        # row your boat gently down the Stream
+        # merrily, merrily, merrily, merrily
+        # you've just crashed the BEAM
+        Map.update!(report, :perfect_count, &(&1 + 1))
+        |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
+
+      {row, nil} ->
+        Map.update!(report, :updates, &[[elem(row, 0), note_front, note_back, note_id] | &1])
+        |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
+
+      {nil, row} ->
+        Map.update!(report, :updates, &[[elem(row, 0), note_front, note_back, note_id] | &1])
+        |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == back_side_row end))
+
+      {_something, _something_else} ->
+        element = %{
+          front: %{text: note_front, row: front_side_row},
+          back: %{text: note_back, row: back_side_row}
+        }
+
+        Map.update!(report, :errors, &[element | &1])
+        |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
+        |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == back_side_row end))
+    end
+  end
+
+  defp get_ids_from_sheet(sheet_rows) do
+    sheet_rows
+    |> Enum.reduce([], fn
+      {_, _, _, nil}, acc -> acc
+      {_, _, _, id}, acc -> [id | acc]
+    end)
   end
 
   defp insert_notes_into_sheet(sheet, updates, inserts, last_row) do
@@ -106,7 +140,7 @@ defmodule Fosfosol do
     values = Enum.map(updates, &tl/1)
 
     update_data =
-      case Sheet.write_rows(sheet, ranges, values) do
+      case GSS.Spreadsheet.write_rows(sheet, ranges, values) do
         {:ok, data} ->
           IO.puts("Should have written #{length(ranges)} IDs to spreadsheet.")
           data
@@ -116,12 +150,12 @@ defmodule Fosfosol do
       end
 
     insert_data =
-      case Sheet.append_rows(sheet, last_row + 1, inserts) do
+      case GSS.Spreadsheet.append_rows(sheet, last_row + 1, inserts) do
         {:error, exception} ->
           Exception.format(:error, exception)
 
         data ->
-          IO.puts("Should have appent #{inserts.length} rows to spreadsheet.")
+          IO.puts("Should have appent #{length(inserts)} rows to spreadsheet.")
           data
       end
 
@@ -147,133 +181,7 @@ defmodule Fosfosol do
       |> Jason.decode!(keys: :atoms)
       |> Map.drop(~w[front back file_id last_updated]a)
 
+    # TODO: ADD FLAGS TO TEXTTTT
     Map.put(base, :fields, %{Front: front, Back: back})
-  end
-
-  defp workhorse(sheet_rows) do
-    fn [note_front, note_back, note_id] ->
-      # search db rows to include the corresponding row ID in these maps
-      front_side_row = Enum.find_value(sheet_rows, finder(1, note_front))
-      back_side_row = Enum.find_value(sheet_rows, finder(2, note_back))
-      comparison = compare(front_side_row, back_side_row)
-
-      case comparison do
-        :missing ->
-          {:missing, [note_front, note_back, note_id]}
-
-        :error ->
-          {:error,
-           "Anki note \"#{note_front}\" (#{front_side_row})/\"#{note_back}\" (#{back_side_row})found different matches in the spreadsheet."}
-
-        :front ->
-          {:ok, [front_side_row, note_front, note_back, note_id]}
-
-        :back ->
-          {:ok, [back_side_row, note_front, note_back, note_id]}
-
-        _ ->
-          {:error, "Unknown error"}
-      end
-    end
-  end
-
-  defp build_writer(file) do
-    fn contents ->
-      options = [limit: :infinity, printable_limit: :infinity]
-      IO.inspect(file, contents, options)
-    end
-  end
-
-  defp deflag(binary) do
-    [_flag, text] = String.split(binary, " ", parts: 2)
-    text
-  end
-
-  defp add_flags(ids) do
-    {:ok, notes} = AnkiConnect.notes_info(%{notes: ids})
-
-    notes = notes
-    |> Enum.map(&properize_note_no_flag/1)
-    |> Enum.reject(fn
-      [front, back, _id] -> String.starts_with?(front, "🇪🇪") and String.starts_with?(back, "🏴󠁧󠁢󠁥󠁮󠁧󠁿")
-    end)
-
-    notes
-    |> Enum.map(&prepare_note_for_update/1)
-    |> Enum.each(&AnkiConnect.update_note/1)
-
-    notes
-  end
-
-  defp prepare_note_for_update([front, back, id]) do
-    %{
-      note: %{
-        id: id,
-        fields: %{
-          Front: "🇪🇪 #{front}",
-          Back: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 #{back}"
-        }
-      }
-    }
-  end
-
-  defp properize_note_no_flag(note) do
-    [
-      note["fields"]["Front"]["value"],
-      note["fields"]["Back"]["value"],
-      note["noteId"]
-    ]
-  end
-
-  defp properize_note(note) do
-    [
-      deflag(note["fields"]["Front"]["value"]),
-      deflag(note["fields"]["Back"]["value"]),
-      note["noteId"]
-    ]
-  end
-
-  defp compare(front, back) do
-    cond do
-      front == nil and back == nil -> :missing
-      front && back && front != back -> :error
-      front -> :front
-      back -> :back
-    end
-  end
-
-  defp finder(position, needle) do
-    fn row -> if Enum.at(row, position) == needle, do: hd(row) end
-  end
-
-  defp read_sheet_rows(sheet) do
-    {:ok, row_count} = Sheet.rows(sheet)
-
-    2..row_count
-    |> Enum.chunk_every(250)
-    |> Enum.reduce([], read_chunk(sheet))
-  end
-
-  defp read_chunk(sheet) do
-    fn indexes_chunk, rows ->
-      start_range = List.first(indexes_chunk)
-      end_range = List.last(indexes_chunk)
-
-      {:ok, raw_rows} =
-        Sheet.read_rows(
-          sheet,
-          start_range,
-          end_range,
-          timeout: 20_000
-        )
-
-      {_count, chunk_rows} =
-        Enum.reduce(raw_rows, {List.first(indexes_chunk), []}, fn
-          row, {count, list} ->
-            {count + 1, [[count | row] | list]}
-        end)
-
-      rows ++ Enum.reverse(chunk_rows)
-    end
   end
 end
