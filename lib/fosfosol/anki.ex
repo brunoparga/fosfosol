@@ -1,4 +1,9 @@
 defmodule Fosfosol.Anki do
+  @moduledoc """
+  `Fosfosol.Anki` contains functions for the app to interact with Anki
+  via AnkiConnect.
+  """
+
   def read_ids do
     # TODO: add an easy way to switch between test and production mode
     # {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:Test"})
@@ -6,7 +11,7 @@ defmodule Fosfosol.Anki do
     anki_ids
   end
 
-  def add_flags(ids, writer) do
+  def add_flags(ids) do
     raw_notes = read_notes(ids)
 
     notes_without_flags =
@@ -20,10 +25,7 @@ defmodule Fosfosol.Anki do
     |> Enum.map(&prepare_note_for_update/1)
     |> Enum.each(&AnkiConnect.update_note/1)
 
-    writer.("Notes that were missing flags:")
-    writer.(notes_without_flags)
-
-    raw_notes |> Enum.map(&properize_note/1)
+    {raw_notes |> Enum.map(&properize_note/1), notes_without_flags}
   end
 
   defp read_notes(ids) do

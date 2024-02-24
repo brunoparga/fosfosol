@@ -8,7 +8,7 @@ defmodule Fosfosol do
   """
 
   use Application
-  alias Fosfosol.{Anki, Report, Sheets}
+  alias Fosfosol.{Anki, Sheets}
 
   def start(_type, _args) do
     sync()
@@ -19,8 +19,6 @@ defmodule Fosfosol do
   Run the synchronization between Google Spreadsheets and Anki.
   """
   def sync do
-    {writer, file} = Report.build_writer()
-
     # First of all we load just the IDs from Anki.
     anki_ids = Anki.read_ids()
 
@@ -29,8 +27,7 @@ defmodule Fosfosol do
     # add them if necessary.
     #
     # We get back all of the notes in a format we need, for later.
-    # TODO: also get back just the flag ones, for the report.
-    anki_notes = Anki.add_flags(anki_ids, writer)
+    {anki_notes, notes_without_flags} = Anki.add_flags(anki_ids)
 
     # Now we load the rows from the spreadsheet.
     sheet = Sheets.load_sheet()
@@ -45,10 +42,13 @@ defmodule Fosfosol do
     # There might also be sheet rows for which flashcards need to
     # be created.
     initial_report = %{
+      notes: length(anki_ids),
+      row_count: length(sheet_rows),
       sheet_rows: sheet_rows,
       perfect_count: 0,
       updates: [],
       sheet_inserts: [],
+      flag_updates: notes_without_flags,
       errors: []
     }
 
@@ -59,9 +59,8 @@ defmodule Fosfosol do
         :updates,
         &Enum.sort(&1, fn row1, row2 -> row1 < row2 end)
       )
-
-    # TODO: get rid of the writer – convert once to JSON and File.write! it.
-    writer.(report)
+      |> then(&Map.put(&1, :new_flashcards, &1.sheet_rows))
+      |> then(&Map.drop(&1, [:sheet_rows]))
 
     if length(report.updates) > 0 or length(report.sheet_inserts) > 0 do
       insert_notes_into_sheet(
@@ -72,10 +71,10 @@ defmodule Fosfosol do
       )
     end
 
-    if length(report.sheet_rows) > 0,
-      do: create_flashcards_and_update_ids(sheet, report.sheet_rows)
+    if length(report.new_flashcards) > 0,
+      do: create_flashcards_and_update_ids(sheet, report.new_flashcards)
 
-    :ok = File.close(file)
+    File.write!("./config/sync_report.json", Jason.encode!(report, pretty: true))
   end
 
   defp generate_report([note_front, note_back, note_id], report) do
