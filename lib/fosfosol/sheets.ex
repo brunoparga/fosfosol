@@ -7,9 +7,7 @@ defmodule Fosfosol.Sheets do
   alias GSS.Spreadsheet, as: GSS
 
   @typep sheet :: pid
-  @typep row_number :: integer()
   @typep raw_row :: list(String.t())
-  @typep row :: {row_number(), T.front_text(), T.back_text(), T.note_id() | nil}
 
   @doc """
   Return a `pid` that is used to interact with the Google Spreadsheet.
@@ -29,7 +27,7 @@ defmodule Fosfosol.Sheets do
   but its ID was not set in the sheet), then the corresponding field
   is `nil`.
   """
-  @spec read_rows(sheet) :: list(row())
+  @spec read_rows(sheet) :: list(T.sheet_row())
   def read_rows(sheet) do
     {:ok, row_count} = GSS.rows(sheet, timeout: 20_000)
 
@@ -49,7 +47,7 @@ defmodule Fosfosol.Sheets do
   the range being identical. For now, ¯\_(ツ)_/¯
   """
 
-  @spec read_chunk(sheet) :: (list(number()), list(row()) -> list(row()))
+  @spec read_chunk(sheet) :: (list(number()), list(T.sheet_row()) -> list(T.sheet_row()))
   defp read_chunk(sheet) do
     fn chunk, acc ->
       chunk_start = List.first(chunk)
@@ -69,7 +67,7 @@ defmodule Fosfosol.Sheets do
   This also changes the type of the row from a list of strings to a tuple.
   """
 
-  @spec format_rows(list(raw_row()), integer()) :: list(row())
+  @spec format_rows(list(raw_row()), integer()) :: list(T.sheet_row())
   defp format_rows(raw_rows, chunk_start) do
     formatter = fn raw_row, {count, list} ->
       new_row = build_new_row(raw_row, count)

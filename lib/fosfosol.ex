@@ -107,7 +107,8 @@ defmodule Fosfosol do
   end
 
   defp create_flashcards_and_update_ids(sheet, rows) do
-    notes = Enum.map(rows, &build_flashcard/1)
+    # TODO: encapsulate the next two lines in an Anki module function
+    notes = Enum.map(rows, &Data.build_flashcard/1)
     {:ok, new_flashcard_ids} = AnkiConnect.add_notes(%{notes: notes})
 
     # TODO: the report doesn't know how to distinguish updates that are
@@ -118,20 +119,5 @@ defmodule Fosfosol do
       |> Enum.map(fn {row, id} -> put_elem(row, 3, id) end)
 
     sync_sheet(sheet, updates, [], 320)
-  end
-
-  defp build_flashcard({_row, front, back, nil}) do
-    base =
-      "./config/settings.json"
-      |> File.read!()
-      |> Jason.decode!(keys: :atoms)
-      |> Map.drop(~w[front back file_id last_updated]a)
-
-    Map.put(base, :fields, %{Front: enflag(:front, front), Back: enflag(:back, back)})
-  end
-
-  defp enflag(side, text) do
-    flag = Keyword.fetch!(Application.fetch_env!(:fosfosol, side).values, :flag)
-    "#{flag} #{text}"
   end
 end

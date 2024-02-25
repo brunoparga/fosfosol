@@ -4,6 +4,11 @@ defmodule Fosfosol.Data do
   memory, without contacting either external source.
   """
 
+  alias Fosfosol.Types, as: T
+
+  @typep flashcard_insert :: term()
+
+  @spec build_report({T.anki_note(), T.anki_note()}, list(T.sheet_row())) :: T.report()
   def build_report({anki_notes, notes_without_flags}, sheet_rows) do
     # Equipped with all the data from both sources, we compare them.
     # We're looking for anything that might need to be inserted or
@@ -14,14 +19,14 @@ defmodule Fosfosol.Data do
     # There might also be sheet rows for which flashcards need to
     # be created.
     initial_report = %{
-      notes: length(anki_notes),
-      row_count: length(sheet_rows),
-      sheet_rows: sheet_rows,
-      perfect_count: 0,
-      updates: [],
-      sheet_inserts: [],
+      errors: [],
       flag_updates: notes_without_flags,
-      errors: []
+      note_count: length(anki_notes),
+      perfect_count: 0,
+      row_count: length(sheet_rows),
+      sheet_inserts: [],
+      sheet_rows: sheet_rows,
+      updates: []
     }
 
     Enum.reduce(anki_notes, initial_report, &generate_report/2)
@@ -34,6 +39,9 @@ defmodule Fosfosol.Data do
     |> then(&Map.drop(&1, [:sheet_rows]))
   end
 
+  # TODO: improve this anki_note type – it needs to be a tuple,
+  # rather than a list of mixed types
+  @spec generate_report(T.anki_note(), T.report()) :: T.report()
   defp generate_report([note_front, note_back, note_id], report) do
     # Okay, so now we're iterating over Anki notes with the sheet rows
     # in context. For each note, we first find the number of the row
@@ -79,5 +87,22 @@ defmodule Fosfosol.Data do
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == back_side_row end))
     end
+  end
+
+  @spec build_flashcard(T.sheet_row()) :: flashcard_insert()
+  def build_flashcard({_row, front, back, nil}) do
+    base =
+      "./config/settings.json"
+      |> File.read!()
+      |> Jason.decode!(keys: :atoms)
+      |> Map.drop(~w[front back file_id last_updated]a)
+
+    Map.put(base, :fields, %{Front: enflag(:front, front), Back: enflag(:back, back)})
+  end
+
+  @spec enflag(:front | :back, T.card_text()) :: T.card_text()
+  defp enflag(side, text) do
+    flag = Keyword.fetch!(Application.fetch_env!(:fosfosol, side).values, :flag)
+    "#{flag} #{text}"
   end
 end
