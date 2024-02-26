@@ -26,13 +26,13 @@ defmodule Fosfosol.Data do
       row_count: length(sheet_rows),
       sheet_inserts: [],
       sheet_rows: sheet_rows,
-      updates: []
+      sheet_updates: []
     }
 
     Enum.reduce(anki_notes, initial_report, &generate_report/2)
     # Sort the list of rows to make our lives easier.
     |> Map.update!(
-      :updates,
+      :sheet_updates,
       &Enum.sort(&1, fn row1, row2 -> row1 < row2 end)
     )
     |> then(&Map.put(&1, :new_flashcards, &1.sheet_rows))
@@ -65,16 +65,16 @@ defmodule Fosfosol.Data do
         # row your boat gently down the Stream
         # merrily, merrily, merrily, merrily
         # you've just crashed the BEAM
-        Map.update!(report, :updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
+        Map.update!(report, :sheet_updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
 
       {row, nil} ->
         # TODO: let the user decide the source of truth in case of conflict
-        Map.update!(report, :updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
+        Map.update!(report, :sheet_updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
 
       {nil, row} ->
-        Map.update!(report, :updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
+        Map.update!(report, :sheet_updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == back_side_row end))
 
       {_something, _something_else} ->

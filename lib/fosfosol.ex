@@ -9,6 +9,7 @@ defmodule Fosfosol do
 
   use Application
   alias Fosfosol.{Anki, Data, Sheets}
+  alias Fosfosol.Types, as: T
 
   def start(_type, _args) do
     :ok = sync()
@@ -35,89 +36,65 @@ defmodule Fosfosol do
     sheet_rows = Sheets.read_rows(sheet)
 
     Data.build_report(notes, sheet_rows)
-    |> do_sync(sheet)
-    |> Map.update!(:updates, fn updates -> Enum.map(updates, &tl(Tuple.to_list(&1))) end)
+    |> insert_flashcards(sheet)
+    |> insert_sheet_rows_from_anki(sheet)
+    |> update_sheet_rows_from_anki(sheet)
+    |> format_updates()
     |> write_report()
   end
 
-  defp do_sync(%{updates: [], sheet_inserts: [], new_flashcards: []} = report, _sheet), do: report
+  defp insert_flashcards(%{new_flashcards: []} = report, _sheet), do: report
 
-  defp do_sync(%{updates: [], sheet_inserts: [], new_flashcards: new_flashcards} = report, sheet) do
-    create_flashcards_and_update_ids(sheet, new_flashcards)
-    report
-  end
-
-  defp do_sync(%{new_flashcards: []} = report, sheet) do
-    sync_sheet(
-      sheet,
-      report.updates,
-      report.sheet_inserts,
-      report.row_count
-    )
-
-    report
-  end
-
-  defp do_sync(report, sheet) do
-    sync_sheet(
-      sheet,
-      report.updates,
-      report.sheet_inserts,
-      report.row_count
-    )
-
-    create_flashcards_and_update_ids(sheet, report.new_flashcards)
-    report
-  end
-
-  defp write_report(report) do
-    File.write!("./config/sync_report.json", Jason.encode!(report, pretty: true))
-  end
-
-  defp sync_sheet(sheet, updates, inserts, row_count) do
-    ranges = Enum.map(updates, fn {row, _, _, _} -> "A#{row}:C#{row}" end)
-    values = Enum.map(updates, &tl(Tuple.to_list(&1)))
-
-    update_data =
-      case values do
-        [] ->
-          []
-
-        data ->
-          GSS.Spreadsheet.write_rows(sheet, ranges, values)
-          IO.puts("Should have updated #{length(ranges)} existing spreadsheet rows.")
-          data
-      end
-
-    insert_data =
-      case inserts do
-        [] ->
-          []
-
-        data ->
-          # We add two to the row count: one is for the sheet's header
-          # row and one so that the append happens *after* the last
-          # existing row.
-          GSS.Spreadsheet.append_rows(sheet, row_count + 2, inserts)
-          IO.puts("Should have added #{length(inserts)} new rows to spreadsheet.")
-          data
-      end
-
-    {update_data, insert_data}
-  end
-
-  defp create_flashcards_and_update_ids(sheet, rows) do
+  defp insert_flashcards(%{new_flashcards: new_flashcards} = report, sheet) do
     # TODO: encapsulate the next two lines in an Anki module function
-    notes = Enum.map(rows, &Data.build_flashcard/1)
+    notes = Enum.map(new_flashcards, &Data.build_flashcard/1)
     {:ok, new_flashcard_ids} = AnkiConnect.add_notes(%{notes: notes})
+    IO.puts("Should have created #{length(new_flashcards)} new Anki notes.")
 
-    # TODO: the report doesn't know how to distinguish updates that are
-    # text corrections from the ones that are new flashcards.
+    # TODO: `reduce` (pun intended) the number of calls to Enum
+    # functions to just one
     updates =
-      rows
+      new_flashcards
       |> Enum.zip(new_flashcard_ids)
       |> Enum.map(fn {row, id} -> put_elem(row, 3, id) end)
 
-    sync_sheet(sheet, updates, [], 320)
+    ranges = Enum.map(updates, fn {row, _, _, _} -> "A#{row}:C#{row}" end)
+    values = Enum.map(updates, &tl(Tuple.to_list(&1)))
+
+    GSS.Spreadsheet.write_rows(sheet, ranges, values)
+    report
+  end
+
+  defp insert_sheet_rows_from_anki(%{sheet_inserts: []} = report, _sheet), do: report
+
+  defp insert_sheet_rows_from_anki(report, sheet) do
+    # We add two to the row count: one is for the sheet's header row and
+    # one so that the append happens *after* the last existing row.
+    GSS.Spreadsheet.append_rows(sheet, report.row_count + 2, report.sheet_inserts)
+    IO.puts("Should have added #{length(report.sheet_inserts)} new rows to spreadsheet.")
+    report
+  end
+
+  defp update_sheet_rows_from_anki(%{sheet_updates: []} = report, _sheet), do: report
+
+  defp update_sheet_rows_from_anki(%{sheet_updates: updates} = report, sheet) do
+    ranges = Enum.map(updates, fn {row, _, _, _} -> "A#{row}:C#{row}" end)
+    values = Enum.map(updates, &tl(Tuple.to_list(&1)))
+
+    GSS.Spreadsheet.write_rows(sheet, ranges, values)
+    IO.puts("Should have updated #{length(ranges)} existing spreadsheet rows.")
+    report
+  end
+
+  defp format_updates(report) do
+    row_tuple_to_list = fn row -> tl(Tuple.to_list(row)) end
+    change = fn updated_rows -> Enum.map(updated_rows, row_tuple_to_list) end
+    Map.update!(report, :sheet_updates, change)
+  end
+
+  @spec write_report(T.report()) :: :ok
+  defp write_report(report) do
+    File.write!("./config/sync_report.json", Jason.encode!(report, pretty: true))
+    # File.write!("./config/sync_report.json", report)
   end
 end

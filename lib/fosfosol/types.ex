@@ -44,7 +44,7 @@ defmodule Fosfosol.Types do
           required(:perfect_count) => count(),
           required(:row_count) => count(),
           required(:sheet_inserts) => list(sheet_insert()),
-          required(:updates) => list(update())
+          required(:sheet_updates) => list(update())
         }
 
   @typep count :: integer()
@@ -52,5 +52,6 @@ defmodule Fosfosol.Types do
   @typep error() :: term()
   @typep flag_update() :: term()
   @typep sheet_insert() :: term()
-  @typep update() :: term()
+  # This guy changes from a tuple to a list due to JSONification
+  @typep update() :: sheet_row() | term()
 end
