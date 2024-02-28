@@ -14,8 +14,6 @@ defmodule Fosfosol.Sheets do
   """
   @spec load_sheet() :: sheet()
   def load_sheet do
-    # TODO: add an easy way to switch between test and production mode
-    # {:ok, sheet_pid} = GSS.Supervisor.spreadsheet("1vucaFV3YGADgxyN7o3gW1cuaM6Hf3xK-41mTiMGsobs")
     {:ok, sheet_pid} = GSS.Supervisor.spreadsheet(Application.fetch_env!(:fosfosol, :file_id))
     sheet_pid
   end

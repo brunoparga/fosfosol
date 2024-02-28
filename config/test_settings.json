@@ -1,0 +1,16 @@
+{
+  "deck_name": "Test",
+  "model_name": "Basic (and reversed card)",
+  "front": {
+    "flag": "🇹🇦",
+    "column_name": "Frente",
+    "subject_name": "Brobdingnagian"
+  },
+  "back": {
+    "flag": "🇬🇶",
+    "column_name": "Trás",
+    "subject_name": "Liliputian"
+  },
+  "file_id": "1vucaFV3YGADgxyN7o3gW1cuaM6Hf3xK-41mTiMGsobs",
+  "last_updated": ""
+}

@@ -1,8 +1,10 @@
 defmodule Fosfosol.Config do
   import Config
 
+  file = if System.get_env("PROD") == "true", do: "prod", else: "test"
+
   config :fosfosol,
-         "./config/settings.json"
+         "./config/#{file}_settings.json"
          |> File.read!()
          |> Jason.decode!(keys: :atoms, objects: :ordered_objects)
          |> Keyword.new()

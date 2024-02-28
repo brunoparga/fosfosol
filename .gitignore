@@ -27,5 +27,5 @@ fosfosol-*.tar
 
 # JSON files used for application data
 api_key.json
-settings.json
+prod_settings.json
 sync_report.json

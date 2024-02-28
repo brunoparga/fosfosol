@@ -5,9 +5,8 @@ defmodule Fosfosol.Anki do
   """
 
   def read_ids do
-    # TODO: add an easy way to switch between test and production mode
-    # {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:Test"})
-    {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:M-224"})
+    deck = Application.fetch_env!(:fosfosol, :deck_name)
+    {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:#{deck}"})
     anki_ids
   end
 
