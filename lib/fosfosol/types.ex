@@ -37,6 +37,7 @@ defmodule Fosfosol.Types do
   """
 
   @type report :: %{
+          required(:environment) => environment(),
           required(:errors) => list(error()),
           required(:flag_updates) => list(flag_update()),
           required(:new_flashcards | :sheet_rows) => list(sheet_row()),
@@ -47,6 +48,7 @@ defmodule Fosfosol.Types do
           required(:sheet_updates) => list(update())
         }
 
+  @typep environment :: :test | :production
   @typep count :: integer()
   # TODO: refine all `term()` types
   @typep error() :: term()

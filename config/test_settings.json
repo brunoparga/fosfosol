@@ -1,4 +1,5 @@
 {
+  "environment": "test",
   "deck_name": "Test",
   "model_name": "Basic (and reversed card)",
   "front": {

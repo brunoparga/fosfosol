@@ -19,6 +19,7 @@ defmodule Fosfosol.Data do
     # There might also be sheet rows for which flashcards need to
     # be created.
     initial_report = %{
+      environment: Application.fetch_env!(:fosfosol, :environment),
       errors: [],
       flag_updates: notes_without_flags,
       note_count: length(anki_notes),

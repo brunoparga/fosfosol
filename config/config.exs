@@ -8,6 +8,7 @@ defmodule Fosfosol.Config do
          |> File.read!()
          |> Jason.decode!(keys: :atoms, objects: :ordered_objects)
          |> Keyword.new()
+         |> Keyword.update!(:environment, &String.to_atom/1)
 
   config :elixir_google_spreadsheets, json: "./config/api_key.json" |> File.read!()
 
