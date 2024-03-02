@@ -46,7 +46,7 @@ defmodule Fosfosol do
   defp insert_flashcards(%{new_flashcards: []} = report, _sheet), do: report
 
   defp insert_flashcards(%{new_flashcards: new_flashcards} = report, sheet) do
-    # TODO: encapsulate the next two lines in an Anki module function
+    # TODO: encapsulate the next lines in an Anki module function
     notes = Enum.map(new_flashcards, &Data.build_flashcard/1)
     {:ok, new_flashcard_ids} = AnkiConnect.add_notes(%{notes: notes})
     IO.puts("Should have created #{length(new_flashcards)} new Anki notes.")
@@ -62,7 +62,8 @@ defmodule Fosfosol do
     values = Enum.map(updates, &tl(Tuple.to_list(&1)))
 
     GSS.Spreadsheet.write_rows(sheet, ranges, values)
-    report
+    # The report only needs the words, not their row numbers or IDs.
+    Map.put(report, :new_flashcards, Enum.slice(values, 0..2))
   end
 
   defp insert_sheet_rows_from_anki(%{sheet_inserts: []} = report, _sheet), do: report
