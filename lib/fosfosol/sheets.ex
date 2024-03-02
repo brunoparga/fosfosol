@@ -34,8 +34,25 @@ defmodule Fosfosol.Sheets do
     # from the spreadsheet itself.
     2..row_count
     |> Enum.chunk_every(250)
+    # TODO: handle empty rows. It involves processing them in the
+    # `formatter` function of `format_rows`, as well as returning
+    # row_count from here so sorting works.
+    # The sheet misbehaves when I edit `formatter`, investigate why.
     |> Enum.reduce([], read_chunk(sheet))
     |> Enum.reverse()
+  end
+
+  @spec sort(T.report(), pid) :: :ok
+  # TODO: only sort if necessary (meaning, if there were sheet inserts
+  # or updates)
+  def sort(%{row_count: row_count}, sheet) do
+    case(String.downcase(IO.gets("Do you want to sort up to row #{row_count + 1}? [y/N]: "))) do
+      "y\n" ->
+        GSS.sort!(sheet, row_count)
+
+      _ ->
+        :ok
+    end
   end
 
   _ = """

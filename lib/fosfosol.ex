@@ -41,6 +41,7 @@ defmodule Fosfosol do
     |> update_sheet_rows_from_anki(sheet)
     |> format_updates()
     |> write_report()
+    |> Sheets.sort(sheet)
   end
 
   defp insert_flashcards(%{new_flashcards: []} = report, _sheet), do: report
@@ -96,6 +97,6 @@ defmodule Fosfosol do
   @spec write_report(T.report()) :: :ok
   defp write_report(report) do
     File.write!("./config/sync_report.json", Jason.encode!(report, pretty: true))
-    # File.write!("./config/sync_report.json", report)
+    report
   end
 end
