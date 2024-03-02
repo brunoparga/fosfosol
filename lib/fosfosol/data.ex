@@ -93,13 +93,15 @@ defmodule Fosfosol.Data do
   @spec build_flashcard(T.sheet_row()) :: flashcard_insert()
   def build_flashcard({_row, front, back, nil}) do
     base =
-      "./config/settings.json"
+      "./config/#{Application.fetch_env!(:fosfosol, :environment)}_settings.json"
       |> File.read!()
       |> Jason.decode!(keys: :atoms)
       |> Map.drop(~w[front back file_id last_updated]a)
 
     Map.put(base, :fields, %{Front: enflag(:front, front), Back: enflag(:back, back)})
   end
+
+  def build_flashcard({_row, _front, _back, _existing_flashcard_id}), do: nil
 
   @spec enflag(:front | :back, T.card_text()) :: T.card_text()
   defp enflag(side, text) do
