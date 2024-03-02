@@ -37,7 +37,15 @@ defmodule Fosfosol.Data do
       &Enum.sort(&1, fn row1, row2 -> row1 < row2 end)
     )
     |> then(&Map.put(&1, :new_flashcards, &1.sheet_rows))
+    |> Map.update!(:new_flashcards, &remove_existing/1)
+    # TODO: to prevent data loss, the old flashcard should be kept in
+    # the spreadsheet with a flag.
     |> then(&Map.drop(&1, [:sheet_rows]))
+  end
+
+  defp remove_existing(rows) do
+    # We want only the rows where the ID field is `nil`.
+    Enum.filter(rows, &(!elem(&1, 3)))
   end
 
   # TODO: improve this anki_note type – it needs to be a tuple,
