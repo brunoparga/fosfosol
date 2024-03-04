@@ -1,6 +1,8 @@
 defmodule Fosfosol.Config do
   import Config
 
+  # TODO: write and run a test script that sets up the test spreadsheet
+  # and anki deck
   file = if System.get_env("PROD") == "true", do: "prod", else: "test"
 
   config :fosfosol,

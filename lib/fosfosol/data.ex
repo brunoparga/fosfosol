@@ -6,7 +6,14 @@ defmodule Fosfosol.Data do
 
   alias Fosfosol.Types, as: T
 
-  @typep flashcard_insert :: term()
+  @typep flashcard_insert :: %{
+    deck_name: String.t(),
+    model_name: String.t(),
+    fields: %{
+      Front: T.card_text(),
+      Back: T.card_text()
+    }
+  }
 
   @spec build_report({T.anki_note(), T.anki_note()}, list(T.sheet_row())) :: T.report()
   def build_report({anki_notes, notes_without_flags}, sheet_rows) do
@@ -104,7 +111,7 @@ defmodule Fosfosol.Data do
       "./config/#{Application.fetch_env!(:fosfosol, :environment)}_settings.json"
       |> File.read!()
       |> Jason.decode!(keys: :atoms)
-      |> Map.drop(~w[front back file_id last_updated]a)
+      |> then(&Map.intersect(%{deck_name: nil, model_name: nil}, &1))
 
     Map.put(base, :fields, %{Front: enflag(:front, front), Back: enflag(:back, back)})
   end
