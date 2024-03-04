@@ -6,7 +6,19 @@ defmodule Fosfosol.Anki do
 
   def read_ids do
     deck = Application.fetch_env!(:fosfosol, :deck_name)
-    get_ids(deck)
+
+    anki_os_pid =
+      case System.cmd("pgrep", ["anki"]) do
+        # If Anki is not yet open, open it
+        {"", _} ->
+          {:os_pid, anki_os_pid} = Port.open({:spawn, "anki"}, []) |> Port.info(:os_pid)
+          Integer.to_string(anki_os_pid)
+
+        {os_pid, 0} ->
+          String.trim(os_pid)
+      end
+
+    {anki_os_pid, get_ids(deck)}
   end
 
   def add_flags(ids) do
@@ -27,8 +39,18 @@ defmodule Fosfosol.Anki do
   end
 
   defp get_ids(deck) do
-    {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:#{deck}"})
-    anki_ids
+    get_ids(deck, 1)
+  end
+
+  defp get_ids(deck, timeout) do
+    case AnkiConnect.find_notes(%{query: "deck:#{deck}"}) do
+      {:ok, anki_ids} ->
+        anki_ids
+
+      {:error, _reason} ->
+        Process.sleep(timeout)
+        get_ids(deck, round(timeout * 1.5))
+    end
   end
 
   defp read_notes(ids) do

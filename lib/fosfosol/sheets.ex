@@ -46,13 +46,8 @@ defmodule Fosfosol.Sheets do
   # TODO: only sort if necessary (meaning, if there were sheet inserts
   # or updates)
   def sort(%{row_count: row_count}, sheet) do
-    case(String.downcase(IO.gets("Do you want to sort up to row #{row_count + 1}? [y/N]: "))) do
-      "y\n" ->
-        GSS.sort!(sheet, row_count)
-
-      _ ->
-        :ok
-    end
+    # TODO: maybe use xdotool to bring focus back here from Anki?
+    GSS.sort!(sheet, row_count)
   end
 
   _ = """

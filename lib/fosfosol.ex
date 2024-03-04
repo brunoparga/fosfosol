@@ -11,6 +11,8 @@ defmodule Fosfosol do
   alias Fosfosol.{Anki, Data, Sheets}
   alias Fosfosol.Types, as: T
 
+  @sigquit "-3"
+
   def start(_type, _args) do
     :ok = sync()
     {:ok, self()}
@@ -21,7 +23,7 @@ defmodule Fosfosol do
   """
   def sync do
     # First of all we load just the IDs from Anki.
-    anki_ids = Anki.read_ids()
+    {anki_os_pid, anki_ids} = Anki.read_ids()
 
     # One thing that is cheap and only requires interacting with Anki,
     # not Sheets, is to check if there are entries without flags. We
@@ -42,6 +44,9 @@ defmodule Fosfosol do
     |> format_updates()
     |> write_report()
     |> Sheets.sort(sheet)
+
+    System.cmd("kill", [@sigquit, anki_os_pid])
+    :ok
   end
 
   defp insert_flashcards(%{new_flashcards: []} = report, _sheet), do: report
