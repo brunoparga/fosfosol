@@ -6,8 +6,7 @@ defmodule Fosfosol.Anki do
 
   def read_ids do
     deck = Application.fetch_env!(:fosfosol, :deck_name)
-    {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:#{deck}"})
-    anki_ids
+    get_ids(deck)
   end
 
   def add_flags(ids) do
@@ -25,6 +24,11 @@ defmodule Fosfosol.Anki do
     |> Enum.each(&AnkiConnect.update_note/1)
 
     {raw_notes |> Enum.map(&properize_note/1), notes_without_flags}
+  end
+
+  defp get_ids(deck) do
+    {:ok, anki_ids} = AnkiConnect.find_notes(%{query: "deck:#{deck}"})
+    anki_ids
   end
 
   defp read_notes(ids) do
