@@ -3,12 +3,12 @@
   "deck_name": "Test",
   "model_name": "Basic (and reversed card)",
   "front": {
-    "flag": "🇹🇦",
+    "flag": "🇹🇦 ",
     "column_name": "Frente",
     "subject_name": "Brobdingnagian"
   },
   "back": {
-    "flag": "🇬🇶",
+    "flag": "🇬🇶 ",
     "column_name": "Trás",
     "subject_name": "Liliputian"
   },

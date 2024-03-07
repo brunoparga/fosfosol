@@ -121,6 +121,6 @@ defmodule Fosfosol.Data do
   @spec enflag(:front | :back, T.card_text()) :: T.card_text()
   defp enflag(side, text) do
     flag = Keyword.fetch!(Application.fetch_env!(:fosfosol, side).values, :flag)
-    "#{flag} #{text}"
+    "#{flag}#{text}"
   end
 end

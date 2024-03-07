@@ -28,7 +28,9 @@ defmodule Fosfosol.Anki do
       raw_notes
       |> Enum.map(&properize_note_no_deflag/1)
       |> Enum.reject(fn
-        [front, back, _id] -> String.starts_with?(front, "🇪🇪") and String.starts_with?(back, "🏴󠁧󠁢󠁥󠁮󠁧󠁿")
+        [front, back, _id] ->
+          String.starts_with?(front, Application.fetch_env!(:fosfosol, :front).values[:flag]) and
+            String.starts_with?(back, Application.fetch_env!(:fosfosol, :back).values[:flag])
       end)
 
     notes_without_flags
@@ -63,24 +65,17 @@ defmodule Fosfosol.Anki do
       note: %{
         id: id,
         fields: %{
-          Front: "🇪🇪 #{front}",
-          Back: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 #{back}"
+          Front: "#{Application.fetch_env!(:fosfosol, :front).values[:flag]}#{front}",
+          Back: "#{Application.fetch_env!(:fosfosol, :back).values[:flag]}#{back}"
         }
       }
     }
   end
 
-  defp deflag(binary) do
-    case String.split(binary, " ", parts: 2) do
-      [_flag, text] -> text
-      [text] -> text
-    end
-  end
-
   defp properize_note(note) do
     [
-      deflag(note["fields"]["Front"]["value"]),
-      deflag(note["fields"]["Back"]["value"]),
+      :fosfosol.deflag(note["fields"]["Front"]["value"]),
+      :fosfosol.deflag(note["fields"]["Back"]["value"]),
       note["noteId"]
     ]
   end

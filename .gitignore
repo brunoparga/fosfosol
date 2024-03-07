@@ -1,5 +1,7 @@
 # The directory Mix will write compiled artifacts to.
 /_build/
+# While Elixir code goes there, Gleam code goes *here*:
+/build/
 
 # If you run "mix test --cover", coverage assets end up here.
 /cover/
