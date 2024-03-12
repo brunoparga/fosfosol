@@ -16,11 +16,11 @@ defmodule Fosfosol.MixProject do
       elixir: "~> 1.14",
       erlc_include_path: "build/dev/erlang/#{@app}/include",
       erlc_paths: [
-        "build/dev/erlang/#{@app}/_gleam_artefacts",
+        "build/dev/erlang/#{@app}/_gleam_artefacts"
       ],
       prune_code_paths: false,
       start_permanent: Mix.env() == :prod,
-      version: "0.2.0",
+      version: "0.2.0"
     ]
   end
 

@@ -7,13 +7,13 @@ defmodule Fosfosol.Data do
   alias Fosfosol.Types, as: T
 
   @typep flashcard_insert :: %{
-    deck_name: String.t(),
-    model_name: String.t(),
-    fields: %{
-      Front: T.card_text(),
-      Back: T.card_text()
-    }
-  }
+           deck_name: String.t(),
+           model_name: String.t(),
+           fields: %{
+             Front: T.card_text(),
+             Back: T.card_text()
+           }
+         }
 
   @spec build_report({T.anki_note(), T.anki_note()}, list(T.sheet_row())) :: T.report()
   def build_report({anki_notes, notes_without_flags}, sheet_rows) do
@@ -81,16 +81,28 @@ defmodule Fosfosol.Data do
         # row your boat gently down the Stream
         # merrily, merrily, merrily, merrily
         # you've just crashed the BEAM
-        Map.update!(report, :sheet_updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
+        Map.update!(
+          report,
+          :sheet_updates,
+          &[{elem(row, 0), note_front, note_back, note_id} | &1]
+        )
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
 
       {row, nil} ->
         # TODO: let the user decide the source of truth in case of conflict
-        Map.update!(report, :sheet_updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
+        Map.update!(
+          report,
+          :sheet_updates,
+          &[{elem(row, 0), note_front, note_back, note_id} | &1]
+        )
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == front_side_row end))
 
       {nil, row} ->
-        Map.update!(report, :sheet_updates, &[{elem(row, 0), note_front, note_back, note_id} | &1])
+        Map.update!(
+          report,
+          :sheet_updates,
+          &[{elem(row, 0), note_front, note_back, note_id} | &1]
+        )
         |> Map.update!(:sheet_rows, &Enum.reject(&1, fn row -> row == back_side_row end))
 
       {_something, _something_else} ->
