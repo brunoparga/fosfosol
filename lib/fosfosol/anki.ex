@@ -40,10 +40,12 @@ defmodule Fosfosol.Anki do
     {raw_notes |> Enum.map(&properize_note/1), notes_without_flags}
   end
 
+  @spec get_ids(String.t()) :: list(integer())
   defp get_ids(deck) do
     get_ids(deck, 1)
   end
 
+  @spec get_ids(String.t(), integer()) :: list(integer())
   defp get_ids(deck, timeout) do
     case AnkiConnect.find_notes(%{query: "deck:#{deck}"}) do
       {:ok, anki_ids} ->
