@@ -19,6 +19,7 @@ defmodule Fosfosol.MixProject do
         "build/dev/erlang/#{@app}/_gleam_artefacts",
       ],
       prune_code_paths: false,
+      releases: releases(),
       start_permanent: Mix.env() == :prod,
       version: "0.2.0",
     ]
@@ -32,11 +33,29 @@ defmodule Fosfosol.MixProject do
     ]
   end
 
+  # A release will be created, wrapped up in Burrito
+  def releases do
+    [
+      fosfosol: [
+        steps: [:assemble, &Burrito.wrap/1],
+        burrito: [
+          targets: [
+            macos: [os: :darwin, cpu: :x86_64],
+            macos_m1: [os: :darwin, cpu: :aarch64],
+            linux: [os: :linux, cpu: :x86_64],
+            windows: [os: :windows, cpu: :x86_64]
+          ]
+        ]
+      ]
+    ]
+  end
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
       {:anki_connect, "~> 0.1.1"},
+      {:burrito, "~> 1.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       # TODO: read this dependency from github
