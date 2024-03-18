@@ -125,14 +125,14 @@ defmodule Fosfosol.Data do
       |> Jason.decode!(keys: :atoms)
       |> then(&Map.intersect(%{deck_name: nil, model_name: nil}, &1))
 
-    Map.put(base, :fields, %{Front: enflag(:front, front), Back: enflag(:back, back)})
+    Map.put(base, :fields, %{Front: enflag(:front_flag, front), Back: enflag(:back_flag, back)})
   end
 
   def build_flashcard({_row, _front, _back, _existing_flashcard_id}), do: nil
 
-  @spec enflag(:front | :back, T.card_text()) :: T.card_text()
+  @spec enflag(:front_flag | :back_flag, T.card_text()) :: T.card_text()
   defp enflag(side, text) do
-    flag = Keyword.fetch!(Application.fetch_env!(:fosfosol, side).values, :flag)
+    flag = Application.fetch_env!(:fosfosol, side)
     "#{flag}#{text}"
   end
 end

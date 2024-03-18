@@ -29,8 +29,8 @@ defmodule Fosfosol.Anki do
       |> Enum.map(&properize_note_no_deflag/1)
       |> Enum.reject(fn
         [front, back, _id] ->
-          String.starts_with?(front, Application.fetch_env!(:fosfosol, :front).values[:flag]) and
-            String.starts_with?(back, Application.fetch_env!(:fosfosol, :back).values[:flag])
+          String.starts_with?(front, Application.fetch_env!(:fosfosol, :front_flag)) and
+            String.starts_with?(back, Application.fetch_env!(:fosfosol, :back_flag))
       end)
 
     notes_without_flags
@@ -67,8 +67,8 @@ defmodule Fosfosol.Anki do
       note: %{
         id: id,
         fields: %{
-          Front: "#{Application.fetch_env!(:fosfosol, :front).values[:flag]}#{front}",
-          Back: "#{Application.fetch_env!(:fosfosol, :back).values[:flag]}#{back}"
+          Front: "#{Application.fetch_env!(:fosfosol, :front_flag)}#{front}",
+          Back: "#{Application.fetch_env!(:fosfosol, :back_flag)}#{back}"
         }
       }
     }
