@@ -8,20 +8,36 @@ defmodule Fosfosol do
   """
 
   use Application
-  alias Fosfosol.{Anki, Data, Sheets}
+  alias Fosfosol.{Anki, Checks, Data, Sheets}
   alias Fosfosol.Types, as: T
 
   @sigquit "-3"
 
+  @doc """
+  Start the app and run the synchronization between Google Spreadsheets
+  and Anki. Yes, this is obviously a function that does too much.
+  """
   def start(_type, _args) do
-    :ok = sync()
-    {:ok, self()}
+    case proceed_to_sync() do
+      true ->
+        :ok = sync()
+        {:ok, self()}
+
+      false ->
+        start(:foo, :bar)
+    end
   end
 
-  @doc """
-  Run the synchronization between Google Spreadsheets and Anki.
-  """
-  def sync do
+  defp proceed_to_sync do
+    settings_ok = Checks.check_settings()
+    api_key_ok = Checks.check_api_key()
+    sheets_access_ok = Checks.check_sheets_access()
+    not_too_recent = Checks.check_not_too_recent()
+
+    Enum.all?([settings_ok, api_key_ok, sheets_access_ok, not_too_recent])
+  end
+
+  defp sync do
     # First of all we load just the IDs from Anki.
     {anki_os_pid, anki_ids} = Anki.read_ids()
 
