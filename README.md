@@ -22,3 +22,5 @@
 * The numbers reported by the app run don't match the JSON report or what actually happens. E.g. the note "pime (b-)/blind" is in the report but not changed in the sheet.
 * Write automated tests
 * Port data processing to Gleam, leaving Elixir as the scripting glue
+* There are 468 reported "perfect" items, 469 notes in the deck and 470 rows in the spreadsheet. What are the discrepancies, where do they come from and how can I ensure they don't happen again?
+* Get rid of the Gleam transitive dependency warning (this requires patching the Gleam compiler).
