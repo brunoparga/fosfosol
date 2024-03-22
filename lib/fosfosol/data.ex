@@ -15,6 +15,9 @@ defmodule Fosfosol.Data do
            }
          }
 
+  @spec get_app_env(atom()) :: term()
+  def get_app_env(key), do: Application.fetch_env!(:fosfosol, key)
+
   @spec build_report({T.anki_note(), T.anki_note()}, list(T.sheet_row())) :: T.report()
   def build_report({anki_notes, notes_without_flags}, sheet_rows) do
     # Equipped with all the data from both sources, we compare them.
@@ -125,14 +128,11 @@ defmodule Fosfosol.Data do
       |> Jason.decode!(keys: :atoms)
       |> then(&Map.intersect(%{deck_name: nil, model_name: nil}, &1))
 
-    Map.put(base, :fields, %{Front: enflag(:front_flag, front), Back: enflag(:back_flag, back)})
+    Map.put(base, :fields, %{
+      Front: :fosfosol.enflag(:front_flag, front),
+      Back: :fosfosol.enflag(:back_flag, back)
+    })
   end
 
   def build_flashcard({_row, _front, _back, _existing_flashcard_id}), do: nil
-
-  @spec enflag(:front_flag | :back_flag, T.card_text()) :: T.card_text()
-  defp enflag(side, text) do
-    flag = Application.fetch_env!(:fosfosol, side)
-    "#{flag}#{text}"
-  end
 end
