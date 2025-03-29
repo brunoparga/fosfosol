@@ -45,9 +45,9 @@ defmodule Fosfosol.Sheets do
   @spec sort(T.report(), pid) :: :ok
   # TODO: only sort if necessary (meaning, if there were sheet inserts
   # or updates)
-  def sort(%{row_count: row_count}, sheet) do
+  def sort(%{row_count: row_count, sheet_inserts: sheet_inserts}, sheet) do
     # TODO: maybe use xdotool to bring focus back here from Anki?
-    GSS.sort!(sheet, row_count)
+    GSS.sort!(sheet, row_count + length(sheet_inserts))
   end
 
   _ = """
